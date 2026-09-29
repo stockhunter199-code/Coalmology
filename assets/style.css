@@ -1,0 +1,99 @@
+/* Gaya Dasar Aplikasi */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 20px;
+    background-color: #f4f6f8;
+    color: #333;
+    line-height: 1.5;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+h1, h3 {
+    color: #1a1a1a;
+    margin-bottom: 20px;
+}
+
+/* Komponen Card Info Makro */
+.card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    padding: 20px;
+    margin-bottom: 25px;
+    border: 1px solid #e1e4e8;
+}
+
+.card-title {
+    margin-top: 0;
+    font-size: 1.15rem;
+    color: #555;
+}
+
+/* Komponen Tabel Responsif */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    border: 1px solid #e1e4e8;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 0.9rem;
+}
+
+th, td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #e1e4e8;
+}
+
+th {
+    background-color: #1f2937;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+tr:hover {
+    background-color: #f9fafb;
+}
+
+/* Lencana / Badges Status */
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.bg-success { background-color: #def7ec; color: #03543f; }
+.bg-danger { background-color: #fde8e8; color: #9b1c1c; }
+.bg-primary { background-color: #e1effe; color: #1e429f; }
+.bg-secondary { background-color: #f3f4f6; color: #374151; }
+
+/* Pewarnaan Khusus Baris Sinyal */
+.row-buy {
+    background-color: #ecfdf5 !important;
+}
+
+.row-avoid {
+    background-color: #fffbeb !important;
+}
+
+.text-danger { color: #c81e1e; font-weight: 600; }
+.text-success { color: #0e9f6e; font-weight: 600; }
+.text-muted { color: #6b7280; font-size: 0.85rem; }
+
+footer {
+    margin-top: 40px;
+    text-align: center;
+}
