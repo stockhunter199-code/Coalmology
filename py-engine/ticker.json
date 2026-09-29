@@ -1,16 +1,12 @@
 {
   "macro_futures_ticker": "NCF=F",
   "stock_tickers": [
+    "AADI.JK",
     "ADRO.JK",
     "PTBA.JK",
     "ITMG.JK",
-    "BUMI.JK",
-    "HRUM.JK",
-    "BYAN.JK",
     "ADMR.JK",
-    "MBMA.JK",
-    "KKGI.JK",
-    "TOBA.JK",
-    "GEMS.JK"
+    "HRUM.JK",
+    "BUMI.JK"
   ]
 }
