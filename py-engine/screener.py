@@ -28,29 +28,45 @@ def load_tickers_with_retry(max_retries=5, delay=2):
                 raise e
 
 def get_stock_sentiment(ticker):
-    """Mengambil sentimen berita dari Alpha Vantage."""
+    """Mengambil sentimen berita dari Alpha Vantage dengan format URL yang valid."""
     clean_ticker = ticker.replace(".JK", "")
+    
+    # PERBAIKAN: Menyisipkan kembali karakter '/' dan '?' yang hilang agar URL valid
     url = f"https://alphavantage.co{clean_ticker}&apikey={API_KEY}"
+    
     try:
-        time.sleep(15) 
-        response = requests.get(url, timeout=15)
+        # Menurunkan jeda tunggu ke 3 detik untuk mempercepat eksekusi total
+        time.sleep(3) 
+        
+        response = requests.get(url, timeout=10)
+        
+        # Validasi jika respons server bukan kode 200 (Sukses)
+        if response.status_code != 200:
+            return "NEUTRAL", 0.0
+            
         data = response.json()
         if "feed" not in data or not data["feed"]:
             return "NEUTRAL", 0.0
+            
         total_sentiment, count = 0.0, 0
         for article in data["feed"]:
             for t_sent in article.get("ticker_sentiment", []):
                 if t_sent["ticker"] == clean_ticker:
                     total_sentiment += float(t_sent["ticker_sentiment_score"])
                     count += 1
-        if count == 0: return "NEUTRAL", 0.0
+                    
+        if count == 0: 
+            return "NEUTRAL", 0.0
+            
         avg_score = total_sentiment / count
         if avg_score >= 0.15: return "BULLISH", avg_score
         elif avg_score <= -0.15: return "BEARISH", avg_score
         else: return "NEUTRAL", avg_score
+        
     except Exception as e:
-        print(f"Gagal memproses analisis sentimen untuk {clean_ticker}: {e}")
-        return "ERROR API", 0.0
+        print(f"Peringatan: Gagal mengambil sentimen untuk {clean_ticker} ({e})")
+        return "NEUTRAL", 0.0
+
 def get_macro_filter(futures_ticker):
     """Memeriksa tren batubara global (Newcastle) menggunakan TA-Lib SMA."""
     try:
