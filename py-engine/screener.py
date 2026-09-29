@@ -216,7 +216,8 @@ def generate_html_dashboard(macro_status, coal_price, swing_results, value_resul
             <h1>⛏️ Premium Coal Stock Screener (Powered by TA-Lib)</h1>
             <div class="card">
                 <h5 class="card-title">Filter Makro Komoditas Global</h5>
-                <p>Newcastle Coal Futures: <strong>${coal_price:.2f}</strong> | Tren: {macro_badge}</p>
+                # Ganti baris ini di dalam html_content skrip Python Anda:
+                <p>Rotterdam Coal Futures: <strong>${coal_price:.2f}</strong> | Tren: {macro_badge}</p>
                 <span class="text-muted">Sistem memadukan parameter Teknikal C-Extension TA-Lib + Sentimen Berita NLP.</span>
             </div>
             
