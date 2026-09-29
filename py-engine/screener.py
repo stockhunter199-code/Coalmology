@@ -95,12 +95,23 @@ def get_macro_filter(futures_ticker):
         return False, 0.0
 
 def analyze_stock(ticker, news_status):
-    """Menerapkan logika screening teknikal dikombinasikan dengan filter sentimen."""
+    """
+    Logika screening: Mengizinkan Breakout Volume tinggi untuk Lapis 1,
+    atau mencicil secara aman (Buy on Weakness) pada saham murah yang sedang sepi.
+    """
     try:
         stock = yf.Ticker(ticker)
         df = stock.history(period="1y")
         if df.empty or len(df) < 50:
             return None
+        
+        # Ambil indikator Fundamental dasar untuk mengamankan posisi cicil
+        info = stock.info
+        trailing_pe = info.get("trailingPE", 0)
+        pbv = info.get("priceToBook", 0)
+        
+        # Filter valuasi standar aman (PER < 8x atau PBV < 1.2x dianggap murah di batubara)
+        is_undervalued = (trailing_pe > 0 and trailing_pe < 8) or (pbv > 0 and pbv < 1.2)
         
         df['MA20'] = ta.sma(df['Close'], length=20)
         df['Vol_MA20'] = ta.sma(df['Volume'], length=20)
@@ -127,7 +138,9 @@ def analyze_stock(ticker, news_status):
         
         vol_spike = volume > (1.5 * vol_ma)
         price_breakout = price >= prev['BB_Upper'] or price >= resistance
-        in_buy_zone = support <= price <= (support * 1.03)
+        
+        # Area Beli Cicil: Harga berada maksimal 3% di sekitar garis support bawah
+        in_buy_zone = support <= price <= (support * 1.03) or price <= (current['MA20'] * 0.98)
         
         status = "HOLD / WATCHING"
         action_trigger = "None"
@@ -135,15 +148,16 @@ def analyze_stock(ticker, news_status):
         if "BEARISH" not in news_status:
             if price_breakout and vol_spike:
                 status = "STRONG BUY (Breakout)"
-                action_trigger = "Breakout Resistance + Vol Spike"
-            elif in_buy_zone and is_squeeze:
-                status = "BUY ON WEAKNESS"
-                action_trigger = "Accumulation Near Support + BB Squeeze"
+                action_trigger = "Institusi Masuk: Breakout Resistance + Volume Spike"
+            elif in_buy_zone and is_squeeze and is_undervalued:
+                # KONDISI KHUSUS: Walau volume sepi, tetap lolos beli untuk tipe INVESTASI CICIL
+                status = "BUY ON WEAKNESS (Cicil)"
+                action_trigger = "Siklus Akumulasi: Saham Murah + Sepi di Area Support Jangka Panjang"
         else:
             status = "AVOID (Bad News)"
-            action_trigger = "Sinyal Teknikal Dibatalkan Akibat Sentimen Negatif Berita"
+            action_trigger = "Sinyal Dibatalkan Akibat Sentimen Negatif Berita"
             
-        stop_loss = support - (1.5 * atr) if not np.isnan(atr) else price * 0.95
+        stop_loss = support - (1.5 * atr) if not np.isnan(atr) else price * 0.92
         risk = price - stop_loss
         target_price = price + (3 * risk)
         potential_upside = ((target_price - price) / price) * 100
@@ -164,6 +178,7 @@ def analyze_stock(ticker, news_status):
     except Exception as e:
         print(f"Error memproses {ticker}: {e}")
         return None
+
 def generate_html_dashboard(macro_status, coal_price, results):
     """Membuat dasbor web statis menggunakan stylesheet CSS lokal."""
     macro_badge = "<span class='badge bg-success'>BULLISH</span>" if macro_status else "<span class='badge bg-danger'>BEARISH (No Trade Zone)</span>"
