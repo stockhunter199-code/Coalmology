@@ -1,99 +1,199 @@
-/* Gaya Dasar Aplikasi */
+/* ==========================================================================
+   1. GLOBAL STYLES & VARIABLES
+   ========================================================================== */
+:root {
+    --bg-main: #f4f6f9;
+    --bg-card: #ffffff;
+    --text-main: #1f2937;
+    --text-muted: #4b5563;
+    --primary-dark: #111827; /* Batubara Dark Theme */
+    --accent-gold: #d97706;  /* Gold Accent */
+    --border-color: #e5e7eb;
+    
+    /* Status Colors */
+    --buy-bg: #ecfdf5;
+    --buy-text: #065f46;
+    --buy-badge: #10b981;
+    
+    --avoid-bg: #fffbeb;
+    --avoid-text: #92400e;
+    --avoid-badge: #f59e0b;
+    
+    --hold-bg: #f9fafb;
+    --hold-text: #374151;
+    --hold-badge: #6b7280;
+}
+
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    padding: 20px;
-    background-color: #f4f6f8;
-    color: #333;
-    line-height: 1.5;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    padding: 30px 20px;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    line-height: 1.6;
+    margin: 0;
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1280px;
     margin: 0 auto;
 }
 
-h1, h3 {
-    color: #1a1a1a;
-    margin-bottom: 20px;
+h1 {
+    font-size: 2.25rem;
+    font-weight: 800;
+    color: var(--primary-dark);
+    margin-bottom: 5px;
 }
 
-/* Komponen Card Info Makro */
+h3 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--primary-dark);
+    margin-top: 30px;
+    margin-bottom: 15px;
+}
+
+/* ==========================================================================
+   2. INFRASTRUCTURE CARDS (MACRO FILTER)
+   ========================================================================== */
 .card {
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    padding: 20px;
-    margin-bottom: 25px;
-    border: 1px solid #e1e4e8;
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    padding: 24px;
+    margin-bottom: 30px;
 }
 
 .card-title {
     margin-top: 0;
-    font-size: 1.15rem;
-    color: #555;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-weight: 600;
 }
 
-/* Komponen Tabel Responsif */
+.card p {
+    font-size: 1.25rem;
+    margin: 0 0 10px 0;
+}
+
+/* ==========================================================================
+   3. NAVIGATION BUTTONS (STRATEGY FILTER COAL)
+   ========================================================================== */
+.filter-btn-container {
+    margin: 25px 0;
+    display: flex;
+    gap: 12px;
+    background: #e5e7eb;
+    padding: 6px;
+    border-radius: 10px;
+    display: inline-flex;
+}
+
+.btn {
+    padding: 10px 24px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--text-main);
+    transition: all 0.25s ease-in-out;
+}
+
+.btn:hover {
+    color: var(--primary-dark);
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.btn.active {
+    background: var(--primary-dark);
+    color: #ffffff;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* ==========================================================================
+   4. DATA TABLES (DYNAMIC & STYLISH)
+   ========================================================================== */
 .table-responsive {
     width: 100%;
     overflow-x: auto;
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    border: 1px solid #e1e4e8;
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
 table {
     width: 100%;
     border-collapse: collapse;
     text-align: left;
-    font-size: 0.9rem;
-}
-
-th, td {
-    padding: 12px 15px;
-    border-bottom: 1px solid #e1e4e8;
+    font-size: 0.92rem;
 }
 
 th {
-    background-color: #1f2937;
+    background-color: var(--primary-dark);
     color: #ffffff;
     font-weight: 600;
+    padding: 16px 18px;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid var(--accent-gold);
+}
+
+td {
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+/* Row Status Coloring */
+tr.row-buy {
+    background-color: var(--buy-bg) !important;
+    color: var(--buy-text);
+}
+
+tr.row-avoid {
+    background-color: var(--avoid-bg) !important;
+    color: var(--avoid-text);
 }
 
 tr:hover {
-    background-color: #f9fafb;
+    background-color: #f8fafc;
 }
 
-/* Lencana / Badges Status */
+/* ==========================================================================
+   5. UI ELEMENTS (BADGES, MISC)
+   ========================================================================== */
 .badge {
     display: inline-block;
-    padding: 4px 8px;
-    font-size: 0.75rem;
-    font-weight: bold;
-    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    border-radius: 6px;
     text-align: center;
+    letter-spacing: 0.02em;
 }
 
-.bg-success { background-color: #def7ec; color: #03543f; }
-.bg-danger { background-color: #fde8e8; color: #9b1c1c; }
-.bg-primary { background-color: #e1effe; color: #1e429f; }
-.bg-secondary { background-color: #f3f4f6; color: #374151; }
+/* Dynamic Badge Colors mapped from script */
+.bg-primary { background-color: var(--buy-badge); color: #fff; }
+.bg-danger { background-color: #ef4444; color: #fff; }
+.bg-success { background-color: #10b981; color: #fff; }
+.bg-secondary { background-color: #9ca3af; color: #fff; }
 
-/* Pewarnaan Khusus Baris Sinyal */
-.row-buy {
-    background-color: #ecfdf5 !important;
-}
-
-.row-avoid {
-    background-color: #fffbeb !important;
-}
-
-.text-danger { color: #c81e1e; font-weight: 600; }
-.text-success { color: #0e9f6e; font-weight: 600; }
-.text-muted { color: #6b7280; font-size: 0.85rem; }
+/* Global Highlight Text */
+.text-danger { color: #dc2626; font-weight: 700; }
+.text-success { color: #16a34a; font-weight: 700; }
+.text-muted { color: var(--text-muted); font-size: 0.85rem; }
 
 footer {
-    margin-top: 40px;
+    margin-top: 50px;
     text-align: center;
+    border-top: 1px solid var(--border-color);
+    padding-top: 20px;
 }
