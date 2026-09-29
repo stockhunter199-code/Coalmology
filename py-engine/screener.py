@@ -5,7 +5,7 @@ import requests
 import pandas as pd
 import numpy as np
 import yfinance as yf
-import pandas_ta as ta
+import talib # Menggunakan Gold Standard Library Finansial Modern
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TICKER_JSON_PATH = os.path.join(BASE_DIR, "ticker.json")
@@ -28,11 +28,11 @@ def load_tickers_with_retry(max_retries=5, delay=2):
                 raise e
 
 def get_stock_sentiment(ticker):
-    """Mengambil sentimen berita dari Alpha Vantage (Fungsi NEWS_SENTIMENT)."""
+    """Mengambil sentimen berita dari Alpha Vantage."""
     clean_ticker = ticker.replace(".JK", "")
     url = f"https://alphavantage.co{clean_ticker}&apikey={API_KEY}"
     try:
-        time.sleep(15) # Kepatuhan Free Tier rate limit Alpha Vantage
+        time.sleep(15) 
         response = requests.get(url, timeout=15)
         data = response.json()
         if "feed" not in data or not data["feed"]:
@@ -52,45 +52,57 @@ def get_stock_sentiment(ticker):
         print(f"Gagal memproses analisis sentimen untuk {clean_ticker}: {e}")
         return "ERROR API", 0.0
 def get_macro_filter(futures_ticker):
-    """Memeriksa tren batubara global (Newcastle). Wajib di atas MA50 dan MA200."""
+    """Memeriksa tren batubara global (Newcastle) menggunakan TA-Lib SMA."""
     try:
         coal = yf.Ticker(futures_ticker)
         df = coal.history(period="1y")
-        if df.empty: return False, 0.0
-        df['MA50'] = ta.sma(df['Close'], length=50)
-        df['MA200'] = ta.sma(df['Close'], length=200)
-        return df['Close'].iloc[-1] > df['MA50'].iloc[-1] and df['Close'].iloc[-1] > df['MA200'].iloc[-1], df['Close'].iloc[-1]
+        if df.empty or len(df) < 200: return False, 0.0
+        
+        # Kalkulasi presisi tinggi menggunakan C-extension TA-Lib
+        ma50 = talib.SMA(df['Close'].values, timeperiod=50)
+        ma200 = talib.SMA(df['Close'].values, timeperiod=200)
+        
+        return df['Close'].iloc[-1] > ma50[-1] and df['Close'].iloc[-1] > ma200[-1], df['Close'].iloc[-1]
     except Exception as e:
         return False, 0.0
 
 def process_screener(ticker, news_status, strategy_type):
-    """Memproses skrining terpisah berdasarkan tipe strategi pilihan user."""
+    """Memproses skrining presisi tinggi menggunakan TA-Lib."""
     try:
         stock = yf.Ticker(ticker)
         df = stock.history(period="1y")
         if df.empty or len(df) < 50: return None
         
-        # Fundamental Data untuk filter Value Investing
         info = stock.info
         pe_ratio = info.get("trailingPE", 0)
         pbv_ratio = info.get("priceToBook", 0)
         div_yield = info.get("dividendYield", 0) * 100 if info.get("dividendYield") else 0.0
         
-        df['MA20'] = ta.sma(df['Close'], length=20)
-        df['Vol_MA20'] = ta.sma(df['Volume'], length=20)
-        bb = ta.bbands(df['Close'], length=20, std=2)
-        df['BB_Width'] = (bb['BBU_20_2.0'] - bb['BBL_20_2.0']) / df['MA20']
-        df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+        close_prices = df['Close'].values
+        volume_data = df['Volume'].values.astype(float)
         
-        current, prev = df.iloc[-1], df.iloc[-2]
+        # Pemanggilan fungsi indikator bawaan TA-Lib secara langsung
+        ma20 = talib.SMA(close_prices, timeperiod=20)
+        vol_ma20 = talib.SMA(volume_data, timeperiod=20)
+        upperband, middleband, lowerband = talib.BBANDS(close_prices, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+        atr_data = talib.ATR(df['High'].values, df['Low'].values, close_prices, timeperiod=14)
+        
+        bb_width = (upperband - lowerband) / ma20
+        bb_width_ma = talib.SMA(bb_width, timeperiod=20)
+        
+        price = df['Close'].iloc[-1]
+        prev_upper = upperband[-2]
+        volume = df['Volume'].iloc[-1]
+        vol_ma = vol_ma20[-1]
+        atr = atr_data[-1]
+        
         recent_df = df.iloc[-20:]
         resistance, support = recent_df['High'].max(), recent_df['Low'].min()
         
-        price, volume, vol_ma, atr = current['Close'], current['Volume'], current['Vol_MA20'], current['ATR']
         vol_spike = volume > (1.5 * vol_ma)
-        price_breakout = price >= prev['BB_Upper'] or price >= resistance
+        price_breakout = price >= prev_upper or price >= resistance
         in_buy_zone = support <= price <= (support * 1.03)
-        is_squeeze = df['BB_Width'].iloc[-1] < ta.sma(df['BB_Width'], length=20).iloc[-1]
+        is_squeeze = bb_width[-1] < bb_width_ma[-1]
         
         status, action_trigger = "WAIT AND SEE", "Belum Ada Momentum Tren Klasik"
         
@@ -98,16 +110,13 @@ def process_screener(ticker, news_status, strategy_type):
             status, action_trigger = "AVOID (Bad News)", "Dibatalkan Sentimen Negatif Berita Pasar"
         else:
             if strategy_type == "swing":
-                # STRATEGI A: MURNI SWING TRADING (Mengejar Momentum Kencang)
                 if price_breakout and vol_spike:
                     status = "STRONG BUY (Breakout)"
-                    action_trigger = "Breakout Resistance Valid + Lonjakan Volume Institusi"
+                    action_trigger = "Breakout Resistance Valid + Lonjakan Volume TA-Lib Terkonfirmasi"
                 else:
                     status = "WAIT AND SEE"
                     action_trigger = "Harga Sideways Konsolidasi, Tunggu Breakout Volume"
-            
             elif strategy_type == "value":
-                # STRATEGI B: VALUE INVESTING (Mencicil Murah saat Sepi)
                 is_cheap = (0 < pe_ratio < 8) or (0 < pbv_ratio < 1.2)
                 if in_buy_zone and is_squeeze and is_cheap:
                     status = "ACCUMULATION (Cicil)"
@@ -137,13 +146,7 @@ def generate_html_dashboard(macro_status, coal_price, swing_results, value_resul
     def build_rows(results):
         html = ""
         for r in results:
-            if "STRONG BUY" in r['Status'] or "ACCUMULATION" in r['Status']:
-                row_cls = "row-buy"
-            elif "AVOID" in r['Status']:
-                row_cls = "row-avoid"
-            else:
-                row_cls = ""
-            
+            row_cls = "row-buy" if "STRONG BUY" in r['Status'] or "ACCUMULATION" in r['Status'] else ("row-avoid" if "AVOID" in r['Status'] else "")
             sent_badge = f"<span class='badge bg-success'>{r['Sentiment']}</span>" if "BULLISH" in r['Sentiment'] else (f"<span class='badge bg-danger'>{r['Sentiment']}</span>" if "BEARISH" in r['Sentiment'] else f"<span class='badge bg-secondary'>{r['Sentiment']}</span>")
             status_badge = "bg-primary" if "BUY" in r['Status'] or "ACCUM" in r['Status'] else ("bg-danger" if "AVOID" in r['Status'] else "bg-secondary")
 
@@ -169,7 +172,7 @@ def generate_html_dashboard(macro_status, coal_price, swing_results, value_resul
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Screener Saham Batubara Multi-Strategi</title>
+        <title>Screener Saham Batubara Multi-Strategi TA-Lib</title>
         <link rel="stylesheet" href="./assets/style.css">
         <style>
             .filter-btn-container {{ margin-bottom: 20px; display: flex; gap: 10px; }}
@@ -181,11 +184,11 @@ def generate_html_dashboard(macro_status, coal_price, swing_results, value_resul
     </head>
     <body>
         <div class="container">
-            <h1>⛏️ Premium Coal Stock Screener</h1>
+            <h1>⛏️ Premium Coal Stock Screener (Powered by TA-Lib)</h1>
             <div class="card">
                 <h5 class="card-title">Filter Makro Komoditas Global</h5>
                 <p>Newcastle Coal Futures: <strong>${coal_price:.2f}</strong> | Tren: {macro_badge}</p>
-                <span class="text-muted">Sistem memadukan parameter Teknikal Aksi Harga + Analisis Sentimen NLP.</span>
+                <span class="text-muted">Sistem memadukan parameter Teknikal C-Extension TA-Lib + Sentimen Berita NLP.</span>
             </div>
             
             <div class="filter-btn-container">
@@ -203,7 +206,6 @@ def generate_html_dashboard(macro_status, coal_price, swing_results, value_resul
                     </thead>
                     <tbody>{build_rows(swing_results)}</tbody>
                 </table>
-                
                 <table id="table-value" class="strategy-table">
                     <thead>
                         <tr>
@@ -215,12 +217,10 @@ def generate_html_dashboard(macro_status, coal_price, swing_results, value_resul
             </div>
             <footer><span class="text-muted">Pembaruan terjadwal otomatis di cloud setiap sore hari setelah penutupan IHSG.</span></footer>
         </div>
-        
         <script>
             function switchStrategy(strat) {{
                 document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
                 document.querySelectorAll('.strategy-table').forEach(t => t.classList.remove('active-table'));
-                
                 if(strat === 'swing') {{
                     document.getElementById('btn-swing').classList.add('active');
                     document.getElementById('table-swing').classList.add('active-table');
@@ -248,7 +248,6 @@ def main():
         print(f"--- Memproses Sentimen Pasar: {ticker} ---")
         news_status, _ = get_stock_sentiment(ticker)
         
-        # Proses skrining terpisah untuk hasil strategi yang berbeda
         swing_data = process_screener(ticker, news_status, "swing")
         value_data = process_screener(ticker, news_status, "value")
         
@@ -257,7 +256,7 @@ def main():
             
     print("Mengekspor visual halaman dasbor multi-strategi...")
     generate_html_dashboard(macro_bullish, coal_price, swing_results, value_results)
-    print("🚀 Sistem multi-strategi sukses diperbarui!")
+    print("🚀 Sistem berkecepatan tinggi TA-Lib sukses diperbarui!")
 
 if __name__ == "__main__":
     main()
