@@ -165,18 +165,20 @@ def analyze_stock(ticker, news_status):
         print(f"Error memproses {ticker}: {e}")
         return None
 def generate_html_dashboard(macro_status, coal_price, results):
-    """Membuat dasbor web statis dengan integrasi kolom sentimen baru."""
+    """Membuat dasbor web statis menggunakan stylesheet CSS lokal."""
     macro_badge = "<span class='badge bg-success'>BULLISH</span>" if macro_status else "<span class='badge bg-danger'>BEARISH (No Trade Zone)</span>"
     
     rows = ""
     for r in results:
+        # Menentukan kelas warna baris tabel
         if "STRONG BUY" in r['Status'] or "BUY ON WEAKNESS" in r['Status']:
-            status_class = "table-success"
+            status_class = "row-buy"
         elif "AVOID" in r['Status']:
-            status_class = "table-warning"
+            status_class = "row-avoid"
         else:
             status_class = ""
             
+        # Menentukan warna lencana sentimen
         if "BULLISH" in r['Sentiment']:
             sent_badge = f"<span class='badge bg-success'>{r['Sentiment']}</span>"
         elif "BEARISH" in r['Sentiment']:
@@ -199,6 +201,7 @@ def generate_html_dashboard(macro_status, coal_price, results):
         </tr>
         """
 
+    # Memanggil stylesheet lokal dari folder assets/style.css
     html_content = f"""
     <!DOCTYPE html>
     <html lang="id">
@@ -206,23 +209,21 @@ def generate_html_dashboard(macro_status, coal_price, results):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Screener Saham Batubara Otomatis</title>
-        <link href="https://jsdelivr.net" rel="stylesheet">
-        <style> body {{ padding: 20px; background-color: #f8f9fa; }} </style>
+        <link rel="stylesheet" href="./assets/style.css">
     </head>
     <body>
         <div class="container">
-            <h1 class="mb-4">⛏️ Premium Coal Stock Screener</h1>
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h5 class="card-title">Filter Makro Komoditas Global</h5>
-                    <p class="card-text">Newcastle Coal Futures: <strong>${coal_price:.2f}</strong> | Tren: {macro_badge}</p>
-                    <small class="text-muted">Sistem memadukan parameter Teknikal Aksi Harga + Analisis Sentimen NLP.</small>
-                </div>
+            <h1>⛏️ Premium Coal Stock Screener</h1>
+            <div class="card">
+                <h5 class="card-title">Filter Makro Komoditas Global</h5>
+                <p>Newcastle Coal Futures: <strong>${coal_price:.2f}</strong> | Tren: {macro_badge}</p>
+                <span class="text-muted">Sistem memadukan parameter Teknikal Aksi Harga + Analisis Sentimen NLP.</span>
             </div>
-            <h3 class="mb-3">Kombinasi Sinyal & Sentimen Hari Ini</h3>
+            
+            <h3>Kombinasi Sinyal & Sentimen Lapis 1 & 2</h3>
             <div class="table-responsive">
-                <table class="table table-bordered table-striped align-middle">
-                    <thead class="table-dark">
+                <table>
+                    <thead>
                         <tr>
                             <th>Ticker</th>
                             <th>Harga Last</th>
@@ -241,7 +242,7 @@ def generate_html_dashboard(macro_status, coal_price, results):
                     </tbody>
                 </table>
             </div>
-            <footer class="mt-5 text-muted text-center"><small>Pembaruan terjadwal otomatis di cloud setiap sore hari setelah penutupan IHSG.</small></footer>
+            <footer><span class="text-muted">Pembaruan terjadwal otomatis di cloud setiap sore hari setelah penutupan IHSG.</span></footer>
         </div>
     </body>
     </html>
