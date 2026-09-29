@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import requests
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -9,7 +10,10 @@ import pandas_ta as ta
 # Mengatur path dinamis agar selalu mengarah ke folder py-engine tempat skrip berada
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TICKER_JSON_PATH = os.path.join(BASE_DIR, "ticker.json")
-OUTPUT_HTML_PATH = os.path.join(BASE_DIR, "..", "index.html") # Taruh di luar py-engine
+OUTPUT_HTML_PATH = os.path.join(BASE_DIR, "..", "index.html")
+
+# Mengambil API Key dari Environment Variable GitHub Secrets
+API_KEY = os.getenv("ALPHA_VANTAGE_KEY", "DEMO")
 
 def load_tickers_with_retry(max_retries=5, delay=2):
     """Membaca file json dengan mekanisme pengulangan jika gagal."""
@@ -19,13 +23,55 @@ def load_tickers_with_retry(max_retries=5, delay=2):
                 data = json.load(f)
                 print(f"✅ Sukses membaca ticker.json pada percobaan ke-{attempt}")
                 return data
-        except (ConfigFileError, json.JSONDecodeError, IOError) as e:
+        except (json.JSONDecodeError, IOError) as e:
             print(f"⚠️ [Percobaan {attempt}/{max_retries}] Gagal membaca ticker.json: {e}")
             if attempt < max_retries:
                 time.sleep(delay)
             else:
                 print("❌ Batas percobaan habis. Gagal memuat konfigurasi ticker.")
                 raise e
+def get_stock_sentiment(ticker):
+    """
+    Mengambil sentimen berita dari Alpha Vantage (Fungsi NEWS_SENTIMENT).
+    Menghasilkan label: BULLISH, BEARISH, atau NEUTRAL beserta skor rata-ratanya.
+    """
+    clean_ticker = ticker.replace(".JK", "")
+    url = f"https://alphavantage.co{clean_ticker}&apikey={API_KEY}"
+    
+    try:
+        # Pembatasan jeda 15 detik demi kepatuhan Free Tier rate limit Alpha Vantage (maks 5 call/menit)
+        time.sleep(15) 
+        
+        response = requests.get(url, timeout=15)
+        data = response.json()
+        
+        if "feed" not in data or not data["feed"]:
+            return "NEUTRAL (Wajar)", 0.0
+        
+        total_sentiment = 0.0
+        count = 0
+        
+        for article in data["feed"]:
+            for ticker_sentiment in article.get("ticker_sentiment", []):
+                if ticker_sentiment["ticker"] == clean_ticker:
+                    total_sentiment += float(ticker_sentiment["ticker_sentiment_score"])
+                    count += 1
+        
+        if count == 0:
+            return "NEUTRAL (Wajar)", 0.0
+            
+        avg_score = total_sentiment / count
+        
+        if avg_score >= 0.15:
+            return "BULLISH (Positif)", avg_score
+        elif avg_score <= -0.15:
+            return "BEARISH (Negatif)", avg_score
+        else:
+            return "NEUTRAL (Wajar)", avg_score
+            
+    except Exception as e:
+        print(f"Gagal memproses analisis sentimen untuk {clean_ticker}: {e}")
+        return "ERROR API", 0.0
 
 def get_macro_filter(futures_ticker):
     """Memeriksa tren batubara global (Newcastle). Wajib di atas MA50 dan MA200."""
@@ -48,8 +94,8 @@ def get_macro_filter(futures_ticker):
         print(f"Gagal mengambil data macro filter: {e}")
         return False, 0.0
 
-def analyze_stock(ticker):
-    """Menerapkan logika screening teknikal untuk setiap saham."""
+def analyze_stock(ticker, news_status):
+    """Menerapkan logika screening teknikal dikombinasikan dengan filter sentimen."""
     try:
         stock = yf.Ticker(ticker)
         df = stock.history(period="1y")
@@ -86,12 +132,16 @@ def analyze_stock(ticker):
         status = "HOLD / WATCHING"
         action_trigger = "None"
         
-        if price_breakout and vol_spike:
-            status = "STRONG BUY (Breakout)"
-            action_trigger = "Breakout Resistance + Vol Spike"
-        elif in_buy_zone and is_squeeze:
-            status = "BUY ON WEAKNESS"
-            action_trigger = "Accumulation Near Support + BB Squeeze"
+        if "BEARISH" not in news_status:
+            if price_breakout and vol_spike:
+                status = "STRONG BUY (Breakout)"
+                action_trigger = "Breakout Resistance + Vol Spike"
+            elif in_buy_zone and is_squeeze:
+                status = "BUY ON WEAKNESS"
+                action_trigger = "Accumulation Near Support + BB Squeeze"
+        else:
+            status = "AVOID (Bad News)"
+            action_trigger = "Sinyal Teknikal Dibatalkan Akibat Sentimen Negatif Berita"
             
         stop_loss = support - (1.5 * atr) if not np.isnan(atr) else price * 0.95
         risk = price - stop_loss
@@ -108,25 +158,39 @@ def analyze_stock(ticker):
             "Stop_Loss": int(stop_loss),
             "Target": int(target_price),
             "Upside": f"{potential_upside:.1f}%",
-            "Vol_Ratio": f"{(volume/vol_ma):.2f}x"
+            "Vol_Ratio": f"{(volume/vol_ma):.2f}x",
+            "Sentiment": news_status
         }
     except Exception as e:
         print(f"Error memproses {ticker}: {e}")
         return None
-
 def generate_html_dashboard(macro_status, coal_price, results):
-    """Membuat dasbor web statis dan menyimpannya di luar folder py-engine."""
+    """Membuat dasbor web statis dengan integrasi kolom sentimen baru."""
     macro_badge = "<span class='badge bg-success'>BULLISH</span>" if macro_status else "<span class='badge bg-danger'>BEARISH (No Trade Zone)</span>"
     
     rows = ""
     for r in results:
-        status_class = "table-success text-dark font-weight-bold" if "BUY" in r['Status'] else ""
+        if "STRONG BUY" in r['Status'] or "BUY ON WEAKNESS" in r['Status']:
+            status_class = "table-success"
+        elif "AVOID" in r['Status']:
+            status_class = "table-warning"
+        else:
+            status_class = ""
+            
+        if "BULLISH" in r['Sentiment']:
+            sent_badge = f"<span class='badge bg-success'>{r['Sentiment']}</span>"
+        elif "BEARISH" in r['Sentiment']:
+            sent_badge = f"<span class='badge bg-danger'>{r['Sentiment']}</span>"
+        else:
+            sent_badge = f"<span class='badge bg-secondary'>{r['Sentiment']}</span>"
+
         rows += f"""
         <tr class="{status_class}">
             <td><strong>{r['Ticker']}</strong></td>
             <td>Rp {r['Price']:,}</td>
-            <td><span class="badge {'bg-primary' if 'BUY' in r['Status'] else 'bg-secondary'}">{r['Status']}</span></td>
-            <td>{r['Trigger']}</td>
+            <td><span class="badge {'bg-primary' if 'BUY' in r['Status'] else ('bg-danger' if 'AVOID' in r['Status'] else 'bg-secondary')}">{r['Status']}</span></td>
+            <td>{sent_badge}</td>
+            <td><small>{r['Trigger']}</small></td>
             <td>Rp {r['Support']:,}</td>
             <td>Rp {r['Resistance']:,}</td>
             <td class="text-danger">Rp {r['Stop_Loss']:,}</td>
@@ -147,28 +211,28 @@ def generate_html_dashboard(macro_status, coal_price, results):
     </head>
     <body>
         <div class="container">
-            <h1 class="mb-4">⛏️ Coal Stock Screener Dashboard</h1>
+            <h1 class="mb-4">⛏️ Premium Coal Stock Screener</h1>
             <div class="card mb-4">
                 <div class="card-body">
-                    <h5 class="card-title">Macro Market Condition Filter</h5>
-                    <p class="card-text">Newcastle Coal Futures: <strong>${coal_price:.2f}</strong> | Status: {macro_badge}</p>
-                    <small class="text-muted">Jika Bearish, disarankan membatasi porsi atau wait and see demi menjaga winrate.</small>
+                    <h5 class="card-title">Filter Makro Komoditas Global</h5>
+                    <p class="card-text">Newcastle Coal Futures: <strong>${coal_price:.2f}</strong> | Tren: {macro_badge}</p>
+                    <small class="text-muted">Sistem memadukan parameter Teknikal Aksi Harga + Analisis Sentimen NLP.</small>
                 </div>
             </div>
-            
-            <h3 class="mb-3">Sinyal Saham Batubara Hari Ini</h3>
+            <h3 class="mb-3">Kombinasi Sinyal & Sentimen Hari Ini</h3>
             <div class="table-responsive">
                 <table class="table table-bordered table-striped align-middle">
                     <thead class="table-dark">
                         <tr>
                             <th>Ticker</th>
-                            <th>Harga Terakhir</th>
-                            <th>Status</th>
-                            <th>Trigger Sinyal</th>
-                            <th>Support (20D)</th>
-                            <th>Resistance (20D)</th>
-                            <th>Stop Loss (ATR)</th>
-                            <th>Target Jual (1:3)</th>
+                            <th>Harga Last</th>
+                            <th>Status Eksekusi</th>
+                            <th>Sentimen Pasar (AI)</th>
+                            <th>Pemicu Sinyal</th>
+                            <th>Support</th>
+                            <th>Resistance</th>
+                            <th>Stop Loss</th>
+                            <th>Target Profit (1:3)</th>
                             <th>Rasio Vol</th>
                         </tr>
                     </thead>
@@ -177,17 +241,16 @@ def generate_html_dashboard(macro_status, coal_price, results):
                     </tbody>
                 </table>
             </div>
-            <footer class="mt-5 text-muted text-center"><small>Diperbarui otomatis via GitHub Actions setiap sore setelah pasar tutup.</small></footer>
+            <footer class="mt-5 text-muted text-center"><small>Pembaruan terjadwal otomatis di cloud setiap sore hari setelah penutupan IHSG.</small></footer>
         </div>
     </body>
     </html>
     """
-    # Menulis ke file diluar folder py-engine (OUTPUT_HTML_PATH)
     with open(OUTPUT_HTML_PATH, "w", encoding="utf-8") as f:
         f.write(html_content)
 
 def main():
-    print("Memuat file konfigurasi ticker...")
+    print("Memuat berkas konfigurasi...")
     config = load_tickers_with_retry()
     
     print("Memulai analisa macro market...")
@@ -195,14 +258,18 @@ def main():
     
     results = []
     for ticker in config["stock_tickers"]:
-        print(f"Memproses analisa teknikal untuk: {ticker}")
-        stock_data = analyze_stock(ticker)
+        print(f"--- Memproses {ticker} ---")
+        print(f"Mengambil data sentimen berita Alpha Vantage...")
+        news_status, _ = get_stock_sentiment(ticker)
+        
+        print(f"Mengevaluasi pola harga teknikal...")
+        stock_data = analyze_stock(ticker, news_status)
         if stock_data:
             results.append(stock_data)
             
-    print(f"Menghasilkan dashboard statis di {OUTPUT_HTML_PATH}...")
+    print(f"Memperbarui visual berkas dasbor di {OUTPUT_HTML_PATH}...")
     generate_html_dashboard(macro_bullish, coal_price, results)
-    print("Proses skrining selesai sukses!")
+    print("🚀 Seluruh proses penyaringan selesai dengan sukses!")
 
 if __name__ == "__main__":
     main()
