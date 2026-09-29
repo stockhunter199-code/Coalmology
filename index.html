@@ -1,0 +1,251 @@
+
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Screener Saham Batubara Multi-Strategi TA-Lib</title>
+        <link rel="stylesheet" href="./assets/style.css">
+        <style>
+            .filter-btn-container { margin-bottom: 20px; display: flex; gap: 10px; }
+            .btn { padding: 10px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; border: 1px solid #ccc; background: #fff; }
+            .btn.active { background: #1f2937; color: #fff; border-color: #1f2937; }
+            .strategy-table { display: none; }
+            .strategy-table.active-table { display: table; width:100%; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>⛏️ Premium Coal Stock Screener (Powered by TA-Lib)</h1>
+            <div class="card">
+                <h5 class="card-title">Filter Makro Komoditas Global</h5>
+                <p>Newcastle Coal Futures: <strong>$0.00</strong> | Tren: <span class='badge bg-danger'>BEARISH (No Trade Zone)</span></p>
+                <span class="text-muted">Sistem memadukan parameter Teknikal C-Extension TA-Lib + Sentimen Berita NLP.</span>
+            </div>
+            
+            <div class="filter-btn-container">
+                <button id="btn-swing" class="btn active" onclick="switchStrategy('swing')">📈 Strategi Murni Swing</button>
+                <button id="btn-value" class="btn" onclick="switchStrategy('value')">💎 Strategi Value Investing</button>
+            </div>
+            
+            <h3 id="strategy-title">Kombinasi Sinyal Murni Swing (Fokus Momentum)</h3>
+            <div class="table-responsive">
+                <table id="table-swing" class="strategy-table active-table">
+                    <thead>
+                        <tr>
+                            <th>Ticker</th><th>Harga Last</th><th>Status</th><th>Sentimen</th><th>Pemicu Sinyal</th><th>PER | DY</th><th>Support/Res</th><th>Stop Loss</th><th>Target Profit</th><th>Vol Ratio</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            <tr class="">
+                <td><strong>AADI</strong></td>
+                <td>Rp 11,050</td>
+                <td><span class="badge bg-secondary">WAIT AND SEE</span></td>
+                <td><span class='badge bg-secondary'>ERROR API</span></td>
+                <td><small>Harga Sideways Konsolidasi, Tunggu Breakout Volume</small></td>
+                <td>5.9x | 861.0%</td>
+                <td>Rp 10,450 / Rp 12,925</td>
+                <td class="text-danger">Rp 9,784</td>
+                <td class="text-success">Rp 14,847 (34.4%)</td>
+                <td>1.57x</td>
+            </tr>
+            
+            <tr class="">
+                <td><strong>ADRO</strong></td>
+                <td>Rp 2,470</td>
+                <td><span class="badge bg-secondary">WAIT AND SEE</span></td>
+                <td><span class='badge bg-secondary'>ERROR API</span></td>
+                <td><small>Harga Sideways Konsolidasi, Tunggu Breakout Volume</small></td>
+                <td>6.8x | 913.0%</td>
+                <td>Rp 2,420 / Rp 2,770</td>
+                <td class="text-danger">Rp 2,302</td>
+                <td class="text-success">Rp 2,973 (20.4%)</td>
+                <td>1.97x</td>
+            </tr>
+            
+            <tr class="">
+                <td><strong>PTBA</strong></td>
+                <td>Rp 3,110</td>
+                <td><span class="badge bg-secondary">WAIT AND SEE</span></td>
+                <td><span class='badge bg-secondary'>ERROR API</span></td>
+                <td><small>Harga Sideways Konsolidasi, Tunggu Breakout Volume</small></td>
+                <td>7.5x | 360.0%</td>
+                <td>Rp 2,700 / Rp 3,200</td>
+                <td class="text-danger">Rp 2,546</td>
+                <td class="text-success">Rp 4,801 (54.4%)</td>
+                <td>1.08x</td>
+            </tr>
+            
+            <tr class="">
+                <td><strong>ITMG</strong></td>
+                <td>Rp 24,975</td>
+                <td><span class="badge bg-secondary">WAIT AND SEE</span></td>
+                <td><span class='badge bg-secondary'>ERROR API</span></td>
+                <td><small>Harga Sideways Konsolidasi, Tunggu Breakout Volume</small></td>
+                <td>7.4x | 675.0%</td>
+                <td>Rp 24,850 / Rp 26,950</td>
+                <td class="text-danger">Rp 24,057</td>
+                <td class="text-success">Rp 27,726 (11.0%)</td>
+                <td>1.22x</td>
+            </tr>
+            
+            <tr class="">
+                <td><strong>BSSR</strong></td>
+                <td>Rp 5,425</td>
+                <td><span class="badge bg-secondary">WAIT AND SEE</span></td>
+                <td><span class='badge bg-secondary'>ERROR API</span></td>
+                <td><small>Harga Sideways Konsolidasi, Tunggu Breakout Volume</small></td>
+                <td>8.0x | 2301.0%</td>
+                <td>Rp 4,680 / Rp 5,500</td>
+                <td class="text-danger">Rp 4,496</td>
+                <td class="text-success">Rp 8,209 (51.3%)</td>
+                <td>2.45x</td>
+            </tr>
+            
+            <tr class="">
+                <td><strong>INDY</strong></td>
+                <td>Rp 2,630</td>
+                <td><span class="badge bg-secondary">WAIT AND SEE</span></td>
+                <td><span class='badge bg-secondary'>ERROR API</span></td>
+                <td><small>Harga Sideways Konsolidasi, Tunggu Breakout Volume</small></td>
+                <td>51.6x | 39.0%</td>
+                <td>Rp 2,540 / Rp 3,260</td>
+                <td class="text-danger">Rp 2,322</td>
+                <td class="text-success">Rp 3,553 (35.1%)</td>
+                <td>0.74x</td>
+            </tr>
+            
+            <tr class="">
+                <td><strong>MBAP</strong></td>
+                <td>Rp 1,715</td>
+                <td><span class="badge bg-secondary">WAIT AND SEE</span></td>
+                <td><span class='badge bg-secondary'>ERROR API</span></td>
+                <td><small>Harga Sideways Konsolidasi, Tunggu Breakout Volume</small></td>
+                <td>31.5x | 290.0%</td>
+                <td>Rp 1,560 / Rp 1,830</td>
+                <td class="text-danger">Rp 1,461</td>
+                <td class="text-success">Rp 2,474 (44.3%)</td>
+                <td>0.69x</td>
+            </tr>
+            </tbody>
+                </table>
+                <table id="table-value" class="strategy-table">
+                    <thead>
+                        <tr>
+                            <th>Ticker</th><th>Harga Last</th><th>Status</th><th>Sentimen</th><th>Pemicu Sinyal</th><th>PER | DY</th><th>Support/Res</th><th>Stop Loss</th><th>Target Profit</th><th>Vol Ratio</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            <tr class="">
+                <td><strong>AADI</strong></td>
+                <td>Rp 11,050</td>
+                <td><span class="badge bg-secondary">HOLD / WATCHING</span></td>
+                <td><span class='badge bg-secondary'>ERROR API</span></td>
+                <td><small>Valuasi Premium atau Harga Menjauhi Area Support Kuat</small></td>
+                <td>5.9x | 861.0%</td>
+                <td>Rp 10,450 / Rp 12,925</td>
+                <td class="text-danger">Rp 9,784</td>
+                <td class="text-success">Rp 14,847 (34.4%)</td>
+                <td>1.57x</td>
+            </tr>
+            
+            <tr class="row-buy">
+                <td><strong>ADRO</strong></td>
+                <td>Rp 2,470</td>
+                <td><span class="badge bg-primary">ACCUMULATION (Cicil)</span></td>
+                <td><span class='badge bg-secondary'>ERROR API</span></td>
+                <td><small>Siklus Akumulasi Bawah: Emiten Murah Fundamental Kokoh</small></td>
+                <td>6.8x | 913.0%</td>
+                <td>Rp 2,420 / Rp 2,770</td>
+                <td class="text-danger">Rp 2,302</td>
+                <td class="text-success">Rp 2,973 (20.4%)</td>
+                <td>1.97x</td>
+            </tr>
+            
+            <tr class="">
+                <td><strong>PTBA</strong></td>
+                <td>Rp 3,110</td>
+                <td><span class="badge bg-secondary">HOLD / WATCHING</span></td>
+                <td><span class='badge bg-secondary'>ERROR API</span></td>
+                <td><small>Valuasi Premium atau Harga Menjauhi Area Support Kuat</small></td>
+                <td>7.5x | 360.0%</td>
+                <td>Rp 2,700 / Rp 3,200</td>
+                <td class="text-danger">Rp 2,546</td>
+                <td class="text-success">Rp 4,801 (54.4%)</td>
+                <td>1.08x</td>
+            </tr>
+            
+            <tr class="">
+                <td><strong>ITMG</strong></td>
+                <td>Rp 24,975</td>
+                <td><span class="badge bg-secondary">HOLD / WATCHING</span></td>
+                <td><span class='badge bg-secondary'>ERROR API</span></td>
+                <td><small>Valuasi Premium atau Harga Menjauhi Area Support Kuat</small></td>
+                <td>7.4x | 675.0%</td>
+                <td>Rp 24,850 / Rp 26,950</td>
+                <td class="text-danger">Rp 24,057</td>
+                <td class="text-success">Rp 27,726 (11.0%)</td>
+                <td>1.22x</td>
+            </tr>
+            
+            <tr class="">
+                <td><strong>BSSR</strong></td>
+                <td>Rp 5,425</td>
+                <td><span class="badge bg-secondary">HOLD / WATCHING</span></td>
+                <td><span class='badge bg-secondary'>ERROR API</span></td>
+                <td><small>Valuasi Premium atau Harga Menjauhi Area Support Kuat</small></td>
+                <td>8.0x | 2301.0%</td>
+                <td>Rp 4,680 / Rp 5,500</td>
+                <td class="text-danger">Rp 4,496</td>
+                <td class="text-success">Rp 8,209 (51.3%)</td>
+                <td>2.45x</td>
+            </tr>
+            
+            <tr class="">
+                <td><strong>INDY</strong></td>
+                <td>Rp 2,630</td>
+                <td><span class="badge bg-secondary">HOLD / WATCHING</span></td>
+                <td><span class='badge bg-secondary'>ERROR API</span></td>
+                <td><small>Valuasi Premium atau Harga Menjauhi Area Support Kuat</small></td>
+                <td>51.6x | 39.0%</td>
+                <td>Rp 2,540 / Rp 3,260</td>
+                <td class="text-danger">Rp 2,322</td>
+                <td class="text-success">Rp 3,553 (35.1%)</td>
+                <td>0.74x</td>
+            </tr>
+            
+            <tr class="">
+                <td><strong>MBAP</strong></td>
+                <td>Rp 1,715</td>
+                <td><span class="badge bg-secondary">HOLD / WATCHING</span></td>
+                <td><span class='badge bg-secondary'>ERROR API</span></td>
+                <td><small>Valuasi Premium atau Harga Menjauhi Area Support Kuat</small></td>
+                <td>31.5x | 290.0%</td>
+                <td>Rp 1,560 / Rp 1,830</td>
+                <td class="text-danger">Rp 1,461</td>
+                <td class="text-success">Rp 2,474 (44.3%)</td>
+                <td>0.69x</td>
+            </tr>
+            </tbody>
+                </table>
+            </div>
+            <footer><span class="text-muted">Pembaruan terjadwal otomatis di cloud setiap sore hari setelah penutupan IHSG.</span></footer>
+        </div>
+        <script>
+            function switchStrategy(strat) {
+                document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.strategy-table').forEach(t => t.classList.remove('active-table'));
+                if(strat === 'swing') {
+                    document.getElementById('btn-swing').classList.add('active');
+                    document.getElementById('table-swing').classList.add('active-table');
+                    document.getElementById('strategy-title').innerText = "Kombinasi Sinyal Murni Swing (Fokus Momentum)";
+                } else {
+                    document.getElementById('btn-value').classList.add('active');
+                    document.getElementById('table-value').classList.add('active-table');
+                    document.getElementById('strategy-title').innerText = "Kombinasi Sinyal Value Investing (Fokus Akumulasi Murah)";
+                }
+            }
+        </script>
+    </body>
+    </html>
+    
