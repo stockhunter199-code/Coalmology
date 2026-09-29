@@ -2,8 +2,8 @@ name: Automatic Coal Stock Screener
 
 on:
   schedule:
-    - cron: '0 10 * * 1-5'  # 17:00 WIB
-  workflow_dispatch:
+    - cron: '0 10 * * 1-5'  # Berjalan otomatis setiap Senin - Jumat pukul 17.00 WIB
+  workflow_dispatch:        # Mengaktifkan tombol "Run workflow" manual di tab Actions
 
 jobs:
   screen-and-deploy:
@@ -20,22 +20,11 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install TA-Lib C Library Dependencies
-      run: |
-        sudo apt-get update
-        # Mengunduh dan menyusun arsitektur C TA-Lib resmi untuk Linux Ubuntu
-        wget http://sourceforge.net
-        tar -xzf ta-lib-0.4.0-src.tar.gz
-        cd ta-lib/
-        ./configure --prefix=/usr
-        make
-        sudo make install
-
-    - name: Install Python Wrappers
+    - name: Install Prebuilt TA-Lib & Dependencies
       run: |
         python -m pip install --upgrade pip
-        # Memasang TA-Lib Python beserta yfinance yang kompatibel dengan NumPy terbaru
-        pip install yfinance pandas numpy TA-Lib requests
+        # Langsung mengunduh wheel pra-kompilasi resmi yang aman dari rate limit 403
+        pip install yfinance pandas numpy ta-lib requests
 
     - name: Run Screener Script Inside Engine Folder
       env:
@@ -49,5 +38,5 @@ jobs:
         git config --global user.name "github-actions[bot]"
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add index.html
-        git diff-index --quiet HEAD || git commit -m "Update Dashboard Realtime Batubara via TA-Lib"
+        git diff-index --quiet HEAD || git commit -m "Update Dashboard Realtime Batubara via Official TA-Lib Wheel"
         git push
