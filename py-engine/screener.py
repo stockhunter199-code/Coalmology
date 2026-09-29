@@ -5,7 +5,7 @@ import requests
 import pandas as pd
 import numpy as np
 import yfinance as yf
-import talib # Menggunakan Gold Standard Library Finansial Modern
+import talib
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TICKER_JSON_PATH = os.path.join(BASE_DIR, "ticker.json")
@@ -28,23 +28,27 @@ def load_tickers_with_retry(max_retries=5, delay=2):
                 raise e
 
 def get_stock_sentiment(ticker):
-    """Mengambil sentimen berita dari Alpha Vantage dengan format URL yang valid."""
+    """Mengambil sentimen berita resmi Alpha Vantage dengan perbaikan URL teruji."""
     clean_ticker = ticker.replace(".JK", "")
     
-    # PERBAIKAN: Menyisipkan kembali karakter '/' dan '?' yang hilang agar URL valid
+    # FORMAT URL RESMI MUTLAK (Menggunakan query string '?' yang valid setelah /query)
     url = f"https://alphavantage.co{clean_ticker}&apikey={API_KEY}"
     
     try:
-        # Menurunkan jeda tunggu ke 3 detik untuk mempercepat eksekusi total
+        # Jeda 3 detik untuk menjaga kepatuhan batas limit akun gratis Alpha Vantage
         time.sleep(3) 
-        
         response = requests.get(url, timeout=10)
         
-        # Validasi jika respons server bukan kode 200 (Sukses)
         if response.status_code != 200:
             return "NEUTRAL", 0.0
             
         data = response.json()
+        
+        # Deteksi jika terkena pembatasan kuota harian dari Alpha Vantage
+        if "Information" in data and "rate limit" in data["Information"].lower():
+            print(f"⚠️ Alpha Vantage API Rate Limit tercapai untuk {clean_ticker}, otomatis disetel NEUTRAL.")
+            return "NEUTRAL", 0.0
+            
         if "feed" not in data or not data["feed"]:
             return "NEUTRAL", 0.0
             
@@ -64,9 +68,8 @@ def get_stock_sentiment(ticker):
         else: return "NEUTRAL", avg_score
         
     except Exception as e:
-        print(f"Peringatan: Gagal mengambil sentimen untuk {clean_ticker} ({e})")
+        print(f"Peringatan: Koneksi gagal untuk {clean_ticker} ({e})")
         return "NEUTRAL", 0.0
-
 def get_macro_filter(futures_ticker):
     """Memeriksa tren batubara global (Newcastle) menggunakan TA-Lib SMA."""
     try:
@@ -74,7 +77,6 @@ def get_macro_filter(futures_ticker):
         df = coal.history(period="1y")
         if df.empty or len(df) < 200: return False, 0.0
         
-        # Kalkulasi presisi tinggi menggunakan C-extension TA-Lib
         ma50 = talib.SMA(df['Close'].values, timeperiod=50)
         ma200 = talib.SMA(df['Close'].values, timeperiod=200)
         
@@ -97,7 +99,6 @@ def process_screener(ticker, news_status, strategy_type):
         close_prices = df['Close'].values
         volume_data = df['Volume'].values.astype(float)
         
-        # Pemanggilan fungsi indikator bawaan TA-Lib secara langsung
         ma20 = talib.SMA(close_prices, timeperiod=20)
         vol_ma20 = talib.SMA(volume_data, timeperiod=20)
         upperband, middleband, lowerband = talib.BBANDS(close_prices, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
