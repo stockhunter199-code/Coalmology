@@ -7,12 +7,10 @@ import numpy as np
 import yfinance as yf
 import pandas_ta as ta
 
-# Mengatur path dinamis agar selalu mengarah ke folder py-engine tempat skrip berada
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TICKER_JSON_PATH = os.path.join(BASE_DIR, "ticker.json")
 OUTPUT_HTML_PATH = os.path.join(BASE_DIR, "..", "index.html")
 
-# Mengambil API Key dari Environment Variable GitHub Secrets
 API_KEY = os.getenv("ALPHA_VANTAGE_KEY", "DEMO")
 
 def load_tickers_with_retry(max_retries=5, delay=2):
@@ -21,210 +19,165 @@ def load_tickers_with_retry(max_retries=5, delay=2):
         try:
             with open(TICKER_JSON_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                print(f"✅ Sukses membaca ticker.json pada percobaan ke-{attempt}")
                 return data
         except (json.JSONDecodeError, IOError) as e:
             print(f"⚠️ [Percobaan {attempt}/{max_retries}] Gagal membaca ticker.json: {e}")
             if attempt < max_retries:
                 time.sleep(delay)
             else:
-                print("❌ Batas percobaan habis. Gagal memuat konfigurasi ticker.")
                 raise e
+
 def get_stock_sentiment(ticker):
-    """
-    Mengambil sentimen berita dari Alpha Vantage (Fungsi NEWS_SENTIMENT).
-    Menghasilkan label: BULLISH, BEARISH, atau NEUTRAL beserta skor rata-ratanya.
-    """
+    """Mengambil sentimen berita dari Alpha Vantage (Fungsi NEWS_SENTIMENT)."""
     clean_ticker = ticker.replace(".JK", "")
     url = f"https://alphavantage.co{clean_ticker}&apikey={API_KEY}"
-    
     try:
-        # Pembatasan jeda 15 detik demi kepatuhan Free Tier rate limit Alpha Vantage (maks 5 call/menit)
-        time.sleep(15) 
-        
+        time.sleep(15) # Kepatuhan Free Tier rate limit Alpha Vantage
         response = requests.get(url, timeout=15)
         data = response.json()
-        
         if "feed" not in data or not data["feed"]:
-            return "NEUTRAL (Wajar)", 0.0
-        
-        total_sentiment = 0.0
-        count = 0
-        
+            return "NEUTRAL", 0.0
+        total_sentiment, count = 0.0, 0
         for article in data["feed"]:
-            for ticker_sentiment in article.get("ticker_sentiment", []):
-                if ticker_sentiment["ticker"] == clean_ticker:
-                    total_sentiment += float(ticker_sentiment["ticker_sentiment_score"])
+            for t_sent in article.get("ticker_sentiment", []):
+                if t_sent["ticker"] == clean_ticker:
+                    total_sentiment += float(t_sent["ticker_sentiment_score"])
                     count += 1
-        
-        if count == 0:
-            return "NEUTRAL (Wajar)", 0.0
-            
+        if count == 0: return "NEUTRAL", 0.0
         avg_score = total_sentiment / count
-        
-        if avg_score >= 0.15:
-            return "BULLISH (Positif)", avg_score
-        elif avg_score <= -0.15:
-            return "BEARISH (Negatif)", avg_score
-        else:
-            return "NEUTRAL (Wajar)", avg_score
-            
+        if avg_score >= 0.15: return "BULLISH", avg_score
+        elif avg_score <= -0.15: return "BEARISH", avg_score
+        else: return "NEUTRAL", avg_score
     except Exception as e:
         print(f"Gagal memproses analisis sentimen untuk {clean_ticker}: {e}")
         return "ERROR API", 0.0
-
 def get_macro_filter(futures_ticker):
     """Memeriksa tren batubara global (Newcastle). Wajib di atas MA50 dan MA200."""
     try:
         coal = yf.Ticker(futures_ticker)
         df = coal.history(period="1y")
-        if df.empty:
-            return False, 0.0
-        
+        if df.empty: return False, 0.0
         df['MA50'] = ta.sma(df['Close'], length=50)
         df['MA200'] = ta.sma(df['Close'], length=200)
-        
-        last_close = df['Close'].iloc[-1]
-        last_ma50 = df['MA50'].iloc[-1]
-        last_ma200 = df['MA200'].iloc[-1]
-        
-        is_bullish = last_close > last_ma50 and last_close > last_ma200
-        return is_bullish, last_close
+        return df['Close'].iloc[-1] > df['MA50'].iloc[-1] and df['Close'].iloc[-1] > df['MA200'].iloc[-1], df['Close'].iloc[-1]
     except Exception as e:
-        print(f"Gagal mengambil data macro filter: {e}")
         return False, 0.0
 
-def analyze_stock(ticker, news_status):
-    """
-    Logika screening: Mengizinkan Breakout Volume tinggi untuk Lapis 1,
-    atau mencicil secara aman (Buy on Weakness) pada saham murah yang sedang sepi.
-    """
+def process_screener(ticker, news_status, strategy_type):
+    """Memproses skrining terpisah berdasarkan tipe strategi pilihan user."""
     try:
         stock = yf.Ticker(ticker)
         df = stock.history(period="1y")
-        if df.empty or len(df) < 50:
-            return None
+        if df.empty or len(df) < 50: return None
         
-        # Ambil indikator Fundamental dasar untuk mengamankan posisi cicil
+        # Fundamental Data untuk filter Value Investing
         info = stock.info
-        trailing_pe = info.get("trailingPE", 0)
-        pbv = info.get("priceToBook", 0)
-        
-        # Filter valuasi standar aman (PER < 8x atau PBV < 1.2x dianggap murah di batubara)
-        is_undervalued = (trailing_pe > 0 and trailing_pe < 8) or (pbv > 0 and pbv < 1.2)
+        pe_ratio = info.get("trailingPE", 0)
+        pbv_ratio = info.get("priceToBook", 0)
+        div_yield = info.get("dividendYield", 0) * 100 if info.get("dividendYield") else 0.0
         
         df['MA20'] = ta.sma(df['Close'], length=20)
         df['Vol_MA20'] = ta.sma(df['Volume'], length=20)
-        
         bb = ta.bbands(df['Close'], length=20, std=2)
-        df['BB_Upper'] = bb['BBU_20_2.0']
-        df['BB_Lower'] = bb['BBL_20_2.0']
-        df['BB_Width'] = (df['BB_Upper'] - df['BB_Lower']) / df['MA20']
-        
-        is_squeeze = df['BB_Width'].iloc[-1] < ta.sma(df['BB_Width'], length=20).iloc[-1]
+        df['BB_Width'] = (bb['BBU_20_2.0'] - bb['BBL_20_2.0']) / df['MA20']
         df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
         
-        current = df.iloc[-1]
-        prev = df.iloc[-2]
-        
+        current, prev = df.iloc[-1], df.iloc[-2]
         recent_df = df.iloc[-20:]
-        resistance = recent_df['High'].max()
-        support = recent_df['Low'].min()
+        resistance, support = recent_df['High'].max(), recent_df['Low'].min()
         
-        price = current['Close']
-        volume = current['Volume']
-        vol_ma = current['Vol_MA20']
-        atr = current['ATR']
-        
+        price, volume, vol_ma, atr = current['Close'], current['Volume'], current['Vol_MA20'], current['ATR']
         vol_spike = volume > (1.5 * vol_ma)
         price_breakout = price >= prev['BB_Upper'] or price >= resistance
+        in_buy_zone = support <= price <= (support * 1.03)
+        is_squeeze = df['BB_Width'].iloc[-1] < ta.sma(df['BB_Width'], length=20).iloc[-1]
         
-        # Area Beli Cicil: Harga berada maksimal 3% di sekitar garis support bawah
-        in_buy_zone = support <= price <= (support * 1.03) or price <= (current['MA20'] * 0.98)
+        status, action_trigger = "WAIT AND SEE", "Belum Ada Momentum Tren Klasik"
         
-        status = "HOLD / WATCHING"
-        action_trigger = "None"
-        
-        if "BEARISH" not in news_status:
-            if price_breakout and vol_spike:
-                status = "STRONG BUY (Breakout)"
-                action_trigger = "Institusi Masuk: Breakout Resistance + Volume Spike"
-            elif in_buy_zone and is_squeeze and is_undervalued:
-                # KONDISI KHUSUS: Walau volume sepi, tetap lolos beli untuk tipe INVESTASI CICIL
-                status = "BUY ON WEAKNESS (Cicil)"
-                action_trigger = "Siklus Akumulasi: Saham Murah + Sepi di Area Support Jangka Panjang"
+        if "BEARISH" in news_status:
+            status, action_trigger = "AVOID (Bad News)", "Dibatalkan Sentimen Negatif Berita Pasar"
         else:
-            status = "AVOID (Bad News)"
-            action_trigger = "Sinyal Dibatalkan Akibat Sentimen Negatif Berita"
+            if strategy_type == "swing":
+                # STRATEGI A: MURNI SWING TRADING (Mengejar Momentum Kencang)
+                if price_breakout and vol_spike:
+                    status = "STRONG BUY (Breakout)"
+                    action_trigger = "Breakout Resistance Valid + Lonjakan Volume Institusi"
+                else:
+                    status = "WAIT AND SEE"
+                    action_trigger = "Harga Sideways Konsolidasi, Tunggu Breakout Volume"
             
+            elif strategy_type == "value":
+                # STRATEGI B: VALUE INVESTING (Mencicil Murah saat Sepi)
+                is_cheap = (0 < pe_ratio < 8) or (0 < pbv_ratio < 1.2)
+                if in_buy_zone and is_squeeze and is_cheap:
+                    status = "ACCUMULATION (Cicil)"
+                    action_trigger = "Siklus Akumulasi Bawah: Emiten Murah Fundamental Kokoh"
+                else:
+                    status = "HOLD / WATCHING"
+                    action_trigger = "Valuasi Premium atau Harga Menjauhi Area Support Kuat"
+
         stop_loss = support - (1.5 * atr) if not np.isnan(atr) else price * 0.92
-        risk = price - stop_loss
-        target_price = price + (3 * risk)
-        potential_upside = ((target_price - price) / price) * 100
+        target_price = price + (3 * (price - stop_loss))
+        upside = ((target_price - price) / price) * 100
         
         return {
-            "Ticker": ticker.replace(".JK", ""),
-            "Price": int(price),
-            "Status": status,
-            "Trigger": action_trigger,
-            "Support": int(support),
-            "Resistance": int(resistance),
-            "Stop_Loss": int(stop_loss),
-            "Target": int(target_price),
-            "Upside": f"{potential_upside:.1f}%",
-            "Vol_Ratio": f"{(volume/vol_ma):.2f}x",
-            "Sentiment": news_status
+            "Ticker": ticker.replace(".JK", ""), "Price": int(price), "Status": status,
+            "Trigger": action_trigger, "Support": int(support), "Resistance": int(resistance),
+            "Stop_Loss": int(stop_loss), "Target": int(target_price), "Upside": f"{upside:.1f}%",
+            "Vol_Ratio": f"{(volume/vol_ma):.2f}x", "Sentiment": news_status,
+            "PE": f"{pe_ratio:.1f}x" if pe_ratio else "-", "DY": f"{div_yield:.1f}%"
         }
     except Exception as e:
         print(f"Error memproses {ticker}: {e}")
         return None
-
-def generate_html_dashboard(macro_status, coal_price, results):
-    """Membuat dasbor web statis menggunakan stylesheet CSS lokal."""
+def generate_html_dashboard(macro_status, coal_price, swing_results, value_results):
+    """Membuat dasbor web statis dengan filter Javascript interaktif bawaan."""
     macro_badge = "<span class='badge bg-success'>BULLISH</span>" if macro_status else "<span class='badge bg-danger'>BEARISH (No Trade Zone)</span>"
     
-    rows = ""
-    for r in results:
-        # Menentukan kelas warna baris tabel
-        if "STRONG BUY" in r['Status'] or "BUY ON WEAKNESS" in r['Status']:
-            status_class = "row-buy"
-        elif "AVOID" in r['Status']:
-            status_class = "row-avoid"
-        else:
-            status_class = ""
+    def build_rows(results):
+        html = ""
+        for r in results:
+            if "STRONG BUY" in r['Status'] or "ACCUMULATION" in r['Status']:
+                row_cls = "row-buy"
+            elif "AVOID" in r['Status']:
+                row_cls = "row-avoid"
+            else:
+                row_cls = ""
             
-        # Menentukan warna lencana sentimen
-        if "BULLISH" in r['Sentiment']:
-            sent_badge = f"<span class='badge bg-success'>{r['Sentiment']}</span>"
-        elif "BEARISH" in r['Sentiment']:
-            sent_badge = f"<span class='badge bg-danger'>{r['Sentiment']}</span>"
-        else:
-            sent_badge = f"<span class='badge bg-secondary'>{r['Sentiment']}</span>"
+            sent_badge = f"<span class='badge bg-success'>{r['Sentiment']}</span>" if "BULLISH" in r['Sentiment'] else (f"<span class='badge bg-danger'>{r['Sentiment']}</span>" if "BEARISH" in r['Sentiment'] else f"<span class='badge bg-secondary'>{r['Sentiment']}</span>")
+            status_badge = "bg-primary" if "BUY" in r['Status'] or "ACCUM" in r['Status'] else ("bg-danger" if "AVOID" in r['Status'] else "bg-secondary")
 
-        rows += f"""
-        <tr class="{status_class}">
-            <td><strong>{r['Ticker']}</strong></td>
-            <td>Rp {r['Price']:,}</td>
-            <td><span class="badge {'bg-primary' if 'BUY' in r['Status'] else ('bg-danger' if 'AVOID' in r['Status'] else 'bg-secondary')}">{r['Status']}</span></td>
-            <td>{sent_badge}</td>
-            <td><small>{r['Trigger']}</small></td>
-            <td>Rp {r['Support']:,}</td>
-            <td>Rp {r['Resistance']:,}</td>
-            <td class="text-danger">Rp {r['Stop_Loss']:,}</td>
-            <td class="text-success">Rp {r['Target']:,} ({r['Upside']})</td>
-            <td>{r['Vol_Ratio']}</td>
-        </tr>
-        """
+            html += f"""
+            <tr class="{row_cls}">
+                <td><strong>{r['Ticker']}</strong></td>
+                <td>Rp {r['Price']:,}</td>
+                <td><span class="badge {status_badge}">{r['Status']}</span></td>
+                <td>{sent_badge}</td>
+                <td><small>{r['Trigger']}</small></td>
+                <td>{r['PE']} | {r['DY']}</td>
+                <td>Rp {r['Support']:,} / Rp {r['Resistance']:,}</td>
+                <td class="text-danger">Rp {r['Stop_Loss']:,}</td>
+                <td class="text-success">Rp {r['Target']:,} ({r['Upside']})</td>
+                <td>{r['Vol_Ratio']}</td>
+            </tr>
+            """
+        return html
 
-    # Memanggil stylesheet lokal dari folder assets/style.css
     html_content = f"""
     <!DOCTYPE html>
     <html lang="id">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Screener Saham Batubara Otomatis</title>
+        <title>Screener Saham Batubara Multi-Strategi</title>
         <link rel="stylesheet" href="./assets/style.css">
+        <style>
+            .filter-btn-container {{ margin-bottom: 20px; display: flex; gap: 10px; }}
+            .btn {{ padding: 10px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; border: 1px solid #ccc; background: #fff; }}
+            .btn.active {{ background: #1f2937; color: #fff; border-color: #1f2937; }}
+            .strategy-table {{ display: none; }}
+            .strategy-table.active-table {{ display: table; width:100%; }}
+        </style>
     </head>
     <body>
         <div class="container">
@@ -235,30 +188,50 @@ def generate_html_dashboard(macro_status, coal_price, results):
                 <span class="text-muted">Sistem memadukan parameter Teknikal Aksi Harga + Analisis Sentimen NLP.</span>
             </div>
             
-            <h3>Kombinasi Sinyal & Sentimen Lapis 1 & 2</h3>
+            <div class="filter-btn-container">
+                <button id="btn-swing" class="btn active" onclick="switchStrategy('swing')">📈 Strategi Murni Swing</button>
+                <button id="btn-value" class="btn" onclick="switchStrategy('value')">💎 Strategi Value Investing</button>
+            </div>
+            
+            <h3 id="strategy-title">Kombinasi Sinyal Murni Swing (Fokus Momentum)</h3>
             <div class="table-responsive">
-                <table>
+                <table id="table-swing" class="strategy-table active-table">
                     <thead>
                         <tr>
-                            <th>Ticker</th>
-                            <th>Harga Last</th>
-                            <th>Status Eksekusi</th>
-                            <th>Sentimen Pasar (AI)</th>
-                            <th>Pemicu Sinyal</th>
-                            <th>Support</th>
-                            <th>Resistance</th>
-                            <th>Stop Loss</th>
-                            <th>Target Profit (1:3)</th>
-                            <th>Rasio Vol</th>
+                            <th>Ticker</th><th>Harga Last</th><th>Status</th><th>Sentimen</th><th>Pemicu Sinyal</th><th>PER | DY</th><th>Support/Res</th><th>Stop Loss</th><th>Target Profit</th><th>Vol Ratio</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {rows}
-                    </tbody>
+                    <tbody>{build_rows(swing_results)}</tbody>
+                </table>
+                
+                <table id="table-value" class="strategy-table">
+                    <thead>
+                        <tr>
+                            <th>Ticker</th><th>Harga Last</th><th>Status</th><th>Sentimen</th><th>Pemicu Sinyal</th><th>PER | DY</th><th>Support/Res</th><th>Stop Loss</th><th>Target Profit</th><th>Vol Ratio</th>
+                        </tr>
+                    </thead>
+                    <tbody>{build_rows(value_results)}</tbody>
                 </table>
             </div>
             <footer><span class="text-muted">Pembaruan terjadwal otomatis di cloud setiap sore hari setelah penutupan IHSG.</span></footer>
         </div>
+        
+        <script>
+            function switchStrategy(strat) {{
+                document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.strategy-table').forEach(t => t.classList.remove('active-table'));
+                
+                if(strat === 'swing') {{
+                    document.getElementById('btn-swing').classList.add('active');
+                    document.getElementById('table-swing').classList.add('active-table');
+                    document.getElementById('strategy-title').innerText = "Kombinasi Sinyal Murni Swing (Fokus Momentum)";
+                }} else {{
+                    document.getElementById('btn-value').classList.add('active');
+                    document.getElementById('table-value').classList.add('active-table');
+                    document.getElementById('strategy-title').innerText = "Kombinasi Sinyal Value Investing (Fokus Akumulasi Murah)";
+                }}
+            }}
+        </script>
     </body>
     </html>
     """
@@ -266,26 +239,25 @@ def generate_html_dashboard(macro_status, coal_price, results):
         f.write(html_content)
 
 def main():
-    print("Memuat berkas konfigurasi...")
+    print("Memuat konfigurasi ticker...")
     config = load_tickers_with_retry()
-    
-    print("Memulai analisa macro market...")
     macro_bullish, coal_price = get_macro_filter(config["macro_futures_ticker"])
     
-    results = []
+    swing_results, value_results = [], []
     for ticker in config["stock_tickers"]:
-        print(f"--- Memproses {ticker} ---")
-        print(f"Mengambil data sentimen berita Alpha Vantage...")
+        print(f"--- Memproses Sentimen Pasar: {ticker} ---")
         news_status, _ = get_stock_sentiment(ticker)
         
-        print(f"Mengevaluasi pola harga teknikal...")
-        stock_data = analyze_stock(ticker, news_status)
-        if stock_data:
-            results.append(stock_data)
+        # Proses skrining terpisah untuk hasil strategi yang berbeda
+        swing_data = process_screener(ticker, news_status, "swing")
+        value_data = process_screener(ticker, news_status, "value")
+        
+        if swing_data: swing_results.append(swing_data)
+        if value_data: value_results.append(value_data)
             
-    print(f"Memperbarui visual berkas dasbor di {OUTPUT_HTML_PATH}...")
-    generate_html_dashboard(macro_bullish, coal_price, results)
-    print("🚀 Seluruh proses penyaringan selesai dengan sukses!")
+    print("Mengekspor visual halaman dasbor multi-strategi...")
+    generate_html_dashboard(macro_bullish, coal_price, swing_results, value_results)
+    print("🚀 Sistem multi-strategi sukses diperbarui!")
 
 if __name__ == "__main__":
     main()
