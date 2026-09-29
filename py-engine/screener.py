@@ -28,15 +28,20 @@ def load_tickers_with_retry(max_retries=5, delay=2):
                 raise e
 
 def get_stock_sentiment(ticker):
-    """Mengambil sentimen berita resmi Alpha Vantage dengan perbaikan URL teruji."""
-    clean_ticker = ticker.replace(".JK", "")
+    """Mengambil sentimen berita Alpha Vantage dengan Force URL Bypass."""
+    clean_ticker = ticker.replace(".JK", "").lower()
     
-    # FORMAT URL RESMI MUTLAK (Menggunakan query string '?' yang valid setelah /query)
-    url = f"https://alphavantage.co{clean_ticker}&apikey={API_KEY}"
+    # Pendekatan karakter literal terpisah untuk mencegah malformasi string URL
+    domain = "https://alphavantage.co"
+    endpoint = "/query"
+    query_string = f"?function=NEWS_SENTIMENT&tickers={clean_ticker}&apikey={API_KEY}"
+    
+    # Penggabungan paksa mutlak
+    url = domain + endpoint + query_string
     
     try:
-        # Jeda 3 detik untuk menjaga kepatuhan batas limit akun gratis Alpha Vantage
-        time.sleep(3) 
+        # Menurunkan jeda untuk efisiensi waktu eksekusi cloud
+        time.sleep(2) 
         response = requests.get(url, timeout=10)
         
         if response.status_code != 200:
@@ -44,7 +49,6 @@ def get_stock_sentiment(ticker):
             
         data = response.json()
         
-        # Deteksi jika terkena pembatasan kuota harian dari Alpha Vantage
         if "Information" in data and "rate limit" in data["Information"].lower():
             print(f"⚠️ Alpha Vantage API Rate Limit tercapai untuk {clean_ticker}, otomatis disetel NEUTRAL.")
             return "NEUTRAL", 0.0
@@ -55,7 +59,7 @@ def get_stock_sentiment(ticker):
         total_sentiment, count = 0.0, 0
         for article in data["feed"]:
             for t_sent in article.get("ticker_sentiment", []):
-                if t_sent["ticker"] == clean_ticker:
+                if t_sent["ticker"].lower() == clean_ticker:
                     total_sentiment += float(t_sent["ticker_sentiment_score"])
                     count += 1
                     
@@ -70,6 +74,7 @@ def get_stock_sentiment(ticker):
     except Exception as e:
         print(f"Peringatan: Koneksi gagal untuk {clean_ticker} ({e})")
         return "NEUTRAL", 0.0
+
 def get_macro_filter(futures_ticker):
     """Memeriksa tren batubara global (Newcastle) menggunakan TA-Lib SMA."""
     try:
