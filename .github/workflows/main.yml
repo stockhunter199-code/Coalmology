@@ -1,42 +1,32 @@
-name: Automatic Coal Stock Screener
+name: Automatic Update stockpick
 
+# Mengatur jadwal otomatisasi alur kerja pipa CI/CD
 on:
   schedule:
-    - cron: '0 10 * * 1-5'  # Berjalan otomatis setiap Senin - Jumat pukul 17.00 WIB
-  workflow_dispatch:        # Mengaktifkan tombol "Run workflow" manual di tab Actions
+    # Berjalan otomatis setiap hari Senin sampai Jumat pukul 09:30 UTC
+    # 09:30 UTC sama dengan pukul 16:30 WIB (Tepat setelah pasar bursa IHSG ditutup resmi)
+    - cron: '30 9 * * 1-5'
+  workflow_dispatch: # Mengaktifkan tombol manual "Run workflow" di tab Actions GitHub
 
 jobs:
   screen-and-deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Mengambil seluruh riwayat commit agar sinkronisasi Git berjalan mulus
 
-    - name: Set Up Python Environment
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+      - name: Post Set Up Python Environment
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Install Prebuilt TA-Lib & Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        # Langsung mengunduh wheel pra-kompilasi resmi yang aman dari rate limit 403
-        pip install yfinance pandas numpy ta-lib requests
-
-    - name: Run Screener Script Inside Engine Folder
-      env:
-        ALPHA_VANTAGE_KEY: ${{ secrets.ALPHA_VANTAGE_KEY }}
-      run: |
-        cd py-engine
-        python screener.py
-
-    - name: Commit and Push Dashboard Changes
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add index.html
-        git diff-index --quiet HEAD || git commit -m "Update Dashboard Realtime Batubara via Official TA-Lib Wheel"
-        git push
+      - name: Install Prebuilt TA-Lib & Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Mengunduh dan memasang paket roda (wheel) biner resmi TA-Lib untuk Linux Ubuntu
+          pip install ta-lib
+          # Memasang pustaka pendukung untuk keperluan mesin screener lokal Anda
+          pip install numpy pandas yfinance requests beautifulsoup4
