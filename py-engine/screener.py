@@ -7,6 +7,9 @@ import numpy as np
 import yfinance as yf
 import talib
 
+# Mengimpor modul pencari data Newcastle dari file terpisah baru
+from newcastle import fetch_newcastle_data
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TICKER_JSON_PATH = os.path.join(BASE_DIR, "ticker.json")
 OUTPUT_HTML_PATH = os.path.join(BASE_DIR, "..", "index.html")
@@ -31,16 +34,13 @@ def get_stock_sentiment(ticker):
     """Mengambil sentimen berita Alpha Vantage dengan Force URL Bypass."""
     clean_ticker = ticker.replace(".JK", "").lower()
     
-    # Pendekatan karakter literal terpisah untuk mencegah malformasi string URL
     domain = "https://alphavantage.co"
     endpoint = "/query"
     query_string = f"?function=NEWS_SENTIMENT&tickers={clean_ticker}&apikey={API_KEY}"
     
-    # Penggabungan paksa mutlak
     url = domain + endpoint + query_string
     
     try:
-        # Menurunkan jeda untuk efisiensi waktu eksekusi cloud
         time.sleep(2) 
         response = requests.get(url, timeout=10)
         
@@ -74,27 +74,33 @@ def get_stock_sentiment(ticker):
     except Exception as e:
         print(f"Peringatan: Koneksi gagal untuk {clean_ticker} ({e})")
         return "NEUTRAL", 0.0
-
 def get_macro_filter(futures_ticker):
-    """Memeriksa tren batubara global dengan sistem pertahanan berlapis dari eror 404 Yahoo."""
+    """
+    Memeriksa tren batubara global dengan memanggil modul newcastle.py secara bersih,
+    kemudian menghitung indikator TA-Lib SMA untuk menentukan status Bullish/Bearish.
+    """
+    # 1. Panggil file newcastle.py yang baru dibuat untuk mendapatkan data tabel dan harga terakhir
+    df, last_close = fetch_newcastle_data()
+    
+    # Jaring pengaman jika data yang dikembalikan kosong atau tidak cukup untuk hitung SMA 200 hari
+    if df.empty or len(df) < 200:
+        print("⚠️ Data historis Newcastle kosong atau kurang dari 200 hari. Mengaktifkan Mode Jaring Pengaman Makro.")
+        return True, last_close
+        
     try:
-        coal = yf.Ticker(futures_ticker)
-        df = coal.history(period="1y")
+        # 2. Ambil nilai harga Close untuk diproses oleh C-Extension TA-Lib
+        close_prices = df["Close"].values
+        ma50 = talib.SMA(close_prices, timeperiod=50)
+        ma200 = talib.SMA(close_prices, timeperiod=200)
         
-        # Jaring Pengaman: Jika Yahoo Finance mengembalikan data kosong atau delisted
-        if df.empty or len(df) < 50:
-            print(f"⚠️ Peringatan: Data untuk ticker {futures_ticker} kosong di Yahoo Finance. Mengaktifkan Mode Bypass Makro.")
-            return True, 135.0 # Menyediakan harga tiruan standar industri agar sistem tidak macet
-            
-        ma50 = talib.SMA(df['Close'].values, timeperiod=50)
-        ma200 = talib.SMA(df['Close'].values, timeperiod=200)
-        
-        last_close = df['Close'].iloc[-1]
+        # Aturan kombinasi winrate tinggi: Harga saat ini wajib di atas MA50 dan MA200 harian
         is_bullish = last_close > ma50[-1] and last_close > ma200[-1]
+        print(f"📈 Analisis Makro Batubara Selesai. Tren Bullish = {is_bullish}")
         return is_bullish, last_close
+        
     except Exception as e:
-        print(f"⚠️ Gagal memproses macro filter akibat kendala server ({e}). Mengaktifkan Mode Bypass Makro.")
-        return True, 135.0
+        print(f"⚠️ Gagal menghitung indikator teknikal makro Newcastle ({e}). Mengaktifkan Jaring Pengaman.")
+        return True, last_close
 
 def process_screener(ticker, news_status, strategy_type):
     """Memproses skrining presisi tinggi menggunakan TA-Lib."""
@@ -213,12 +219,12 @@ def generate_html_dashboard(macro_status, coal_price, swing_results, value_resul
     </head>
     <body>
         <div class="container">
-            <h1>⛏️ Premium Coal Stock Screener (Powered by TA-Lib)</h1>
+            <h1>⛏️ Premium Coalmology Stock Screener</h1>
             <div class="card">
                 <h5 class="card-title">Filter Makro Komoditas Global</h5>
-                # Ganti baris ini di dalam html_content skrip Python Anda:
-                <p>Rotterdam Coal Futures: <strong>${coal_price:.2f}</strong> | Tren: {macro_badge}</p>
-                <span class="text-muted">Sistem memadukan parameter Teknikal C-Extension TA-Lib + Sentimen Berita NLP.</span>
+                <!-- Teks judul di bawah diubah menampilkan data harga Newcastle Coal asli -->
+                <p>Newcastle Coal Futures: <strong>${coal_price:.2f}</strong> | Tren: {macro_badge}</p>
+                <span class="text-muted">Sistem memadukan parameter Teknikal + Sentimen Berita.</span>
             </div>
             
             <div class="filter-btn-container">
