@@ -1,32 +1,41 @@
 name: Automatic Update stockpick
 
-# Mengatur jadwal otomatisasi alur kerja pipa CI/CD
 on:
   schedule:
-    # Berjalan otomatis setiap hari Senin sampai Jumat pukul 09:30 UTC
-    # 09:30 UTC sama dengan pukul 16:30 WIB (Tepat setelah pasar bursa IHSG ditutup resmi)
-    - cron: '30 9 * * 1-5'
-  workflow_dispatch: # Mengaktifkan tombol manual "Run workflow" di tab Actions GitHub
+    # Berjalan otomatis setiap hari Senin - Jumat pukul 09:00 UTC (16:00 WIB)
+    - cron: '0 9 * * 1-5'
+  workflow_dispatch:
+    # Memungkinkan pemicuan skrip secara manual lewat tombol di dashboard GitHub
 
 jobs:
-  screen-and-deploy:
+  run-screener:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 # Mengambil seluruh riwayat commit agar sinkronisasi Git berjalan mulus
+    - name: Batalkan Pengecekan Kode Sumber Repositori
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
-      - name: Post Set Up Python Environment
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+    - name: Konfigurasi Ruang Kerja Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-      - name: Install Prebuilt TA-Lib & Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          # Mengunduh dan memasang paket roda (wheel) biner resmi TA-Lib untuk Linux Ubuntu
-          pip install ta-lib
-          # Memasang pustaka pendukung untuk keperluan mesin screener lokal Anda
-          pip install numpy pandas yfinance requests beautifulsoup4
+    - name: Memasang Kompilator Dependensi TA-Lib C-Library
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential wget
+        wget http://sourceforge.net
+        tar -xzf ta-lib-0.4.0-src.tar.gz
+        cd ta-lib/
+        ./configure --prefix=/usr
+        make
+        sudo make install
+        cd ..
+        rm -rf ta-lib ta-lib-0.4.0-src.tar.gz
+
+    - name: Instalasi Pustaka Python (yfinance, talib, pandas)
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas numpy requests yfinance TA-Lib
